@@ -5,6 +5,7 @@ import morgan from "morgan";
 import passport from "passport";
 import dotenv from "dotenv";
 import path from "path";
+import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
 import configurePassport from "./config/passport.js";
@@ -74,8 +75,9 @@ export default async (req, res) => {
   return app(req, res);
 };
 
-// For local development
-if (process.env.NODE_ENV !== "production") {
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isDirectRun) {
   const port = Number(process.env.PORT || 5000);
   const startServer = async () => {
     try {
@@ -84,6 +86,7 @@ if (process.env.NODE_ENV !== "production") {
       } else {
         console.log("Starting Smart Campus backend in memory mode (database disabled)");
       }
+
       app.listen(port, () => {
         console.log(`Smart Campus backend running on port ${port}`);
       });
@@ -92,5 +95,6 @@ if (process.env.NODE_ENV !== "production") {
       process.exit(1);
     }
   };
+
   startServer();
 }

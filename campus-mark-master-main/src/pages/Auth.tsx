@@ -8,6 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { GraduationCap } from "lucide-react";
+import api from "@/lib/api";
+
+type AuthSuccess = {
+  token: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+  };
+};
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -24,16 +35,24 @@ const Auth = () => {
     
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
 
-    // Demo authentication
-    setTimeout(() => {
-      localStorage.setItem("userEmail", email);
-      localStorage.setItem("userRole", "student");
+    const payload = await api
+      .post<AuthSuccess>("/auth/dev-login", { email, role: "student" }, { skipToast: true })
+      .catch((error: Error) => {
+        toast.error(error.message || "Login failed");
+        return null;
+      });
+
+    if (payload) {
+      localStorage.setItem("authToken", payload.token);
+      localStorage.setItem("userProfile", JSON.stringify(payload.user));
+      localStorage.setItem("userEmail", payload.user.email ?? email);
+      localStorage.setItem("userRole", payload.user.role ?? "student");
       toast.success("Welcome back!");
-      setIsLoading(false);
       navigate("/dashboard");
-    }, 1000);
+    }
+
+    setIsLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -42,16 +61,26 @@ const Auth = () => {
     
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
-    const role = formData.get("role") as string;
+    const role = ((formData.get("role") as string) || "student").trim();
+    const name = (formData.get("name") as string) || "";
 
-    // Demo signup
-    setTimeout(() => {
-      localStorage.setItem("userEmail", email);
-      localStorage.setItem("userRole", role);
+    const payload = await api
+      .post<AuthSuccess>("/auth/dev-login", { name, email, role }, { skipToast: true })
+      .catch((error: Error) => {
+        toast.error(error.message || "Signup failed");
+        return null;
+      });
+
+    if (payload) {
+      localStorage.setItem("authToken", payload.token);
+      localStorage.setItem("userProfile", JSON.stringify(payload.user));
+      localStorage.setItem("userEmail", payload.user.email ?? email);
+      localStorage.setItem("userRole", payload.user.role ?? role);
       toast.success("Account created successfully!");
-      setIsLoading(false);
       navigate("/dashboard");
-    }, 1000);
+    }
+
+    setIsLoading(false);
   };
 
   return (
@@ -178,7 +207,7 @@ const Auth = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="student">Student</SelectItem>
-                      <SelectItem value="faculty">Faculty</SelectItem>
+                      <SelectItem value="teacher">Faculty</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>

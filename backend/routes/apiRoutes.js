@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authMiddleware.js";
 import { requireRole } from "../middleware/roleMiddleware.js";
+import { getClubs, createClub, deleteClub } from "../controllers/studentController.js";
 import {
   getCurrentUser,
   getAnnouncements,
@@ -34,13 +35,12 @@ router.post("/announcements", requireRole("admin"), asyncHandler(createAnnouncem
 router.delete("/announcements/:announcementId", requireRole("admin"), asyncHandler(deleteAnnouncement));
 
 router.get("/events", asyncHandler(getEvents));
-router.post("/events", requireRole("admin"), asyncHandler(createEvent));
+router.post("/events", requireRole("teacher", "admin"), asyncHandler(createEvent));
 router.post("/events/:eventId/rsvp", asyncHandler(rsvpEvent));
 
 router.get("/lost-found", asyncHandler(getLostItems));
 router.post("/lost-found", uploadLostFoundImage, asyncHandler(createLostItem));
 router.patch("/lost-found/:itemId/status", requireRole("teacher", "admin"), asyncHandler(updateLostItemStatus));
-import { getClubs, createClub, deleteClub } from "../controllers/studentController.js";
 
 router.get("/polls", asyncHandler(getPolls));
 router.post("/polls", asyncHandler(createPoll));
@@ -52,8 +52,8 @@ router.post("/resources/:resourceId/download", asyncHandler(registerResourceDown
 router.post("/feedback", asyncHandler(submitFeedback));
 router.get("/feedback", asyncHandler(getFeedback));
 
-export default router;
-
 router.get("/clubs", asyncHandler(getClubs));
 router.post("/clubs", requireRole("admin"), asyncHandler(createClub));
 router.delete("/clubs/:clubId", requireRole("admin"), asyncHandler(deleteClub));
+
+export default router;

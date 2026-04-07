@@ -1,6 +1,7 @@
 import { Router } from "express";
 import passport from "passport";
-import { handleGoogleCallback } from "../controllers/authController.js";
+import { handleDevLogin, handleGoogleCallback } from "../controllers/authController.js";
+import asyncHandler from "../utils/asyncHandler.js";
 
 const router = Router();
 
@@ -33,6 +34,8 @@ router.get(
     prompt: "select_account",
   })
 );
+
+router.post("/dev-login", asyncHandler(handleDevLogin));
 
 router.get("/google/callback", (req, res, next) => {
   passport.authenticate("google", { session: false }, async (err, user, info) => {

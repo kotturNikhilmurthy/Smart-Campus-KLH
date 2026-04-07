@@ -3,11 +3,21 @@ import Club from "../models/Club.js";
 import Event from "../models/Event.js";
 import Poll from "../models/Poll.js";
 import Resource from "../models/Resource.js";
+import mockStore from "../services/mockStore.js";
+import { isDatabaseEnabled } from "../services/runtimeConfig.js";
 
 /**
  * Supplies high-level dashboard metrics tailored for students.
  */
 export const getStudentDashboardSummary = async (req, res) => {
+  if (!isDatabaseEnabled) {
+    return res.status(200).json({
+      success: true,
+      message: "Student dashboard summary",
+      data: mockStore.getStudentDashboardSummary(req.user?.id),
+    });
+  }
+
   const userId = req.user?.id;
   const studentProfile = await Student.findOne({ user: userId }).populate("joinedClubs", "name");
 
@@ -47,6 +57,14 @@ const shapeClub = (club, joinedClubIds = new Set()) => ({
  * Returns all clubs, annotating joined status for students.
  */
 export const getClubs = async (req, res) => {
+  if (!isDatabaseEnabled) {
+    return res.status(200).json({
+      success: true,
+      message: "Clubs fetched",
+      data: mockStore.getClubsForUser({ _id: req.user?.id, role: req.user?.role }),
+    });
+  }
+
   let joinedClubIds = new Set();
 
   if (req.user?.role === "student") {
@@ -79,6 +97,20 @@ export const createClub = async (req, res) => {
     return res.status(409).json({ success: false, message: "A club with this name already exists", data: null });
   }
 
+  if (!isDatabaseEnabled) {
+    const created = mockStore.createClub({
+      name: sanitizedName,
+      description: sanitizedDescription,
+      category: sanitizedCategory,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Club created",
+      data: created,
+    });
+  }
+
   const club = await Club.create({
     name: sanitizedName,
     description: sanitizedDescription,
@@ -100,6 +132,15 @@ export const createClub = async (req, res) => {
 export const deleteClub = async (req, res) => {
   const clubId = req.params.clubId;
 
+  if (!isDatabaseEnabled) {
+    const deleted = mockStore.deleteClub(clubId);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "Club not found", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "Club deleted", data: null });
+  }
+
   const deleted = await Club.findByIdAndDelete(clubId);
   if (!deleted) {
     return res.status(404).json({ success: false, message: "Club not found", data: null });
@@ -115,6 +156,16 @@ export const deleteClub = async (req, res) => {
  */
 export const joinClub = async (req, res) => {
   const clubId = req.params.clubId;
+
+  if (!isDatabaseEnabled) {
+    const club = mockStore.joinClub(clubId, req.user?.id);
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Student profile or club not found", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "Joined club", data: club });
+  }
+
   const student = await Student.findOne({ user: req.user?.id });
 
   if (!student) {
@@ -148,6 +199,16 @@ export const joinClub = async (req, res) => {
  */
 export const leaveClub = async (req, res) => {
   const clubId = req.params.clubId;
+
+  if (!isDatabaseEnabled) {
+    const club = mockStore.leaveClub(clubId, req.user?.id);
+    if (!club) {
+      return res.status(404).json({ success: false, message: "Student profile or club not found", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "Left club", data: club });
+  }
+
   const student = await Student.findOne({ user: req.user?.id });
 
   if (!student) {

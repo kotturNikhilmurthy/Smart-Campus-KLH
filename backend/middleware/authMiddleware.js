@@ -1,5 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import mockStore from "../services/mockStore.js";
+import { isDatabaseEnabled } from "../services/runtimeConfig.js";
 
 /**
  * Verifies the JWT token provided via Authorization header.
@@ -20,7 +22,9 @@ export const authenticate = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, secret);
-    const user = await User.findById(decoded.userId).select("-__v");
+    const user = isDatabaseEnabled
+      ? await User.findById(decoded.userId).select("-__v")
+      : mockStore.findUserById(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid token", data: null });

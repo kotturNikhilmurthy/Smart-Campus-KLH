@@ -9,6 +9,8 @@ import Resource from "../models/Resource.js";
 import Feedback from "../models/Feedback.js";
 import { LOST_FOUND_UPLOAD_BASE_PATH } from "../middleware/uploadMiddleware.js";
 import path from "path";
+import mockStore from "../services/mockStore.js";
+import { isDatabaseEnabled } from "../services/runtimeConfig.js";
 
 /**
  * Returns the authenticated user profile along with role-specific details.
@@ -20,14 +22,16 @@ export const getCurrentUser = async (req, res) => {
     return res.status(401).json({ success: false, message: "Unauthorized", data: null });
   }
 
-  const user = await User.findById(userId).select("-__v");
+  const user = isDatabaseEnabled ? await User.findById(userId).select("-__v") : mockStore.findUserById(userId);
   if (!user) {
     return res.status(404).json({ success: false, message: "User not found", data: null });
   }
 
   let roleDetails = null;
 
-  if (user.role === "student") {
+  if (!isDatabaseEnabled) {
+    roleDetails = mockStore.getRoleDetails(user);
+  } else if (user.role === "student") {
     roleDetails = await Student.findOne({ user: user._id })
       .populate("joinedClubs", "name category")
       .select("department year joinedClubs profilePic");
@@ -55,7 +59,9 @@ export const getCurrentUser = async (req, res) => {
  * Retrieves announcements sorted by pinned status and recency.
  */
 export const getAnnouncements = async (req, res) => {
-  const announcements = await Announcement.find({}).sort({ isPinned: -1, postedAt: -1 });
+  const announcements = isDatabaseEnabled
+    ? await Announcement.find({}).sort({ isPinned: -1, postedAt: -1 })
+    : mockStore.getAnnouncements();
   return res.status(200).json({ success: true, message: "Announcements fetched", data: announcements });
 };
 
@@ -76,14 +82,22 @@ export const createAnnouncement = async (req, res) => {
     return res.status(400).json({ success: false, message: "Title and content are required", data: null });
   }
 
-  const announcement = await Announcement.create({
-    title: sanitizedTitle,
-    content: sanitizedContent,
-    category: sanitizedCategory,
-    isPinned: Boolean(isPinned),
-    postedBy: req.user.name,
-    postedAt: new Date(),
-  });
+  const announcement = isDatabaseEnabled
+    ? await Announcement.create({
+        title: sanitizedTitle,
+        content: sanitizedContent,
+        category: sanitizedCategory,
+        isPinned: Boolean(isPinned),
+        postedBy: req.user.name,
+        postedAt: new Date(),
+      })
+    : mockStore.createAnnouncement({
+        title: sanitizedTitle,
+        content: sanitizedContent,
+        category: sanitizedCategory,
+        isPinned: Boolean(isPinned),
+        postedBy: req.user.name,
+      });
 
   return res.status(201).json({ success: true, message: "Announcement created", data: announcement });
 };
@@ -97,7 +111,9 @@ export const deleteAnnouncement = async (req, res) => {
   }
 
   const announcementId = req.params.announcementId;
-  const deleted = await Announcement.findByIdAndDelete(announcementId);
+  const deleted = isDatabaseEnabled
+    ? await Announcement.findByIdAndDelete(announcementId)
+    : mockStore.deleteAnnouncement(announcementId);
 
   if (!deleted) {
     return res.status(404).json({ success: false, message: "Announcement not found", data: null });
@@ -110,7 +126,7 @@ export const deleteAnnouncement = async (req, res) => {
  * Returns all campus events ordered by date.
  */
 export const getEvents = async (req, res) => {
-  const events = await Event.find({}).sort({ date: 1 });
+  const events = isDatabaseEnabled ? await Event.find({}).sort({ date: 1 }) : mockStore.getEvents();
   return res.status(200).json({ success: true, message: "Events fetched", data: events });
 };
 
@@ -123,6 +139,15 @@ export const rsvpEvent = async (req, res) => {
 
   if (!userId) {
     return res.status(401).json({ success: false, message: "Unauthorized", data: null });
+  }
+
+  if (!isDatabaseEnabled) {
+    const event = mockStore.rsvpEvent(eventId, userId);
+    if (!event) {
+      return res.status(404).json({ success: false, message: "Event not found", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "RSVP recorded", data: event });
   }
 
   const event = await Event.findById(eventId);
@@ -144,7 +169,7 @@ export const rsvpEvent = async (req, res) => {
  * Lists lost-and-found items ordered by recency.
  */
 export const getLostItems = async (req, res) => {
-  const items = await LostItem.find({}).sort({ createdAt: -1 });
+  const items = isDatabaseEnabled ? await LostItem.find({}).sort({ createdAt: -1 }) : mockStore.getLostItems();
   return res.status(200).json({ success: true, message: "Lost & found items fetched", data: items });
 };
 
@@ -183,17 +208,29 @@ export const createLostItem = async (req, res) => {
     resolvedImageUrl = path.posix.join(LOST_FOUND_UPLOAD_BASE_PATH, uploadedImage.filename);
   }
 
-  const item = await LostItem.create({
-    title: sanitizedTitle,
-    description: sanitizedDescription,
-    category: (category || "Others").toString().trim(),
-    location: sanitizedLocation,
-    date: parsedDate,
-    status: normalizedStatus,
-    imageUrl: resolvedImageUrl,
-    studentId: sanitizedStudentId,
-    reportedBy: req.user?.id || null,
-  });
+  const item = isDatabaseEnabled
+    ? await LostItem.create({
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        category: (category || "Others").toString().trim(),
+        location: sanitizedLocation,
+        date: parsedDate,
+        status: normalizedStatus,
+        imageUrl: resolvedImageUrl,
+        studentId: sanitizedStudentId,
+        reportedBy: req.user?.id || null,
+      })
+    : mockStore.createLostItem({
+        title: sanitizedTitle,
+        description: sanitizedDescription,
+        category: (category || "Others").toString().trim(),
+        location: sanitizedLocation,
+        date: parsedDate.toISOString(),
+        status: normalizedStatus,
+        imageUrl: resolvedImageUrl,
+        studentId: sanitizedStudentId,
+        reportedBy: req.user?.id || null,
+      });
 
   return res.status(201).json({ success: true, message: "Item submitted", data: item });
 };
@@ -211,7 +248,9 @@ export const updateLostItemStatus = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid status", data: null });
   }
 
-  const item = await LostItem.findByIdAndUpdate(itemId, { status: normalizedStatus }, { new: true });
+  const item = isDatabaseEnabled
+    ? await LostItem.findByIdAndUpdate(itemId, { status: normalizedStatus }, { new: true })
+    : mockStore.updateLostItemStatus(itemId, normalizedStatus);
   if (!item) {
     return res.status(404).json({ success: false, message: "Item not found", data: null });
   }
@@ -223,6 +262,14 @@ export const updateLostItemStatus = async (req, res) => {
  * Returns polls annotated with the authenticated user's vote.
  */
 export const getPolls = async (req, res) => {
+  if (!isDatabaseEnabled) {
+    return res.status(200).json({
+      success: true,
+      message: "Polls fetched",
+      data: mockStore.getPollsForUser(req.user?.id),
+    });
+  }
+
   const polls = await Poll.find({}).sort({ createdAt: -1 }).lean();
   const userId = req.user?.id?.toString();
 
@@ -281,13 +328,21 @@ export const createPoll = async (req, res) => {
     return res.status(400).json({ success: false, message: "A valid end date is required", data: null });
   }
 
-  const poll = await Poll.create({
-    question: sanitizedQuestion,
-    description: sanitizedDescription,
-    options: preparedOptions,
-    endDate: pollEndDate,
-    createdBy: req.user?.id,
-  });
+  const poll = isDatabaseEnabled
+    ? await Poll.create({
+        question: sanitizedQuestion,
+        description: sanitizedDescription,
+        options: preparedOptions,
+        endDate: pollEndDate,
+        createdBy: req.user?.id,
+      })
+    : mockStore.createPoll({
+        question: sanitizedQuestion,
+        description: sanitizedDescription,
+        options: preparedOptions,
+        endDate: pollEndDate.toISOString(),
+        createdBy: req.user?.id,
+      });
 
   return res.status(201).json({ success: true, message: "Poll created", data: poll });
 };
@@ -304,6 +359,24 @@ export const votePoll = async (req, res) => {
 
   if (!normalizedOptionKey) {
     return res.status(400).json({ success: false, message: "Option key is required", data: null });
+  }
+
+  if (!isDatabaseEnabled) {
+    const result = mockStore.votePoll(pollId, userId, normalizedOptionKey);
+
+    if (result.error === "not_found") {
+      return res.status(404).json({ success: false, message: "Poll not found", data: null });
+    }
+
+    if (result.error === "already_voted") {
+      return res.status(400).json({ success: false, message: "User already voted", data: null });
+    }
+
+    if (result.error === "invalid_option") {
+      return res.status(400).json({ success: false, message: "Invalid option", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "Vote recorded", data: result.poll });
   }
 
   const poll = await Poll.findById(pollId);
@@ -331,7 +404,7 @@ export const votePoll = async (req, res) => {
  * Lists downloadable resources.
  */
 export const getResources = async (req, res) => {
-  const resources = await Resource.find({}).sort({ createdAt: -1 });
+  const resources = isDatabaseEnabled ? await Resource.find({}).sort({ createdAt: -1 }) : mockStore.getResources();
   return res.status(200).json({ success: true, message: "Resources fetched", data: resources });
 };
 
@@ -341,11 +414,13 @@ export const getResources = async (req, res) => {
 export const registerResourceDownload = async (req, res) => {
   const resourceId = req.params.resourceId;
 
-  const resource = await Resource.findByIdAndUpdate(
-    resourceId,
-    { $inc: { downloads: 1 } },
-    { new: true }
-  );
+  const resource = isDatabaseEnabled
+    ? await Resource.findByIdAndUpdate(
+        resourceId,
+        { $inc: { downloads: 1 } },
+        { new: true }
+      )
+    : mockStore.registerResourceDownload(resourceId);
 
   if (!resource) {
     return res.status(404).json({ success: false, message: "Resource not found", data: null });
@@ -367,13 +442,19 @@ export const submitFeedback = async (req, res) => {
     return res.status(400).json({ success: false, message: "Category and description are required", data: null });
   }
 
-  const feedback = await Feedback.create({
-    category: sanitizedCategory,
-    description: sanitizedDescription,
-    submittedBy: req.user?.id,
-    status: "submitted",
-    submittedAt: new Date(),
-  });
+  const feedback = isDatabaseEnabled
+    ? await Feedback.create({
+        category: sanitizedCategory,
+        description: sanitizedDescription,
+        submittedBy: req.user?.id,
+        status: "submitted",
+        submittedAt: new Date(),
+      })
+    : mockStore.submitFeedback({
+        category: sanitizedCategory,
+        description: sanitizedDescription,
+        submittedBy: req.user?.id,
+      });
 
   return res.status(201).json({ success: true, message: "Feedback submitted", data: feedback });
 };
@@ -382,6 +463,14 @@ export const submitFeedback = async (req, res) => {
  * Returns feedback entries (teachers can view all, students only their own).
  */
 export const getFeedback = async (req, res) => {
+  if (!isDatabaseEnabled) {
+    return res.status(200).json({
+      success: true,
+      message: "Feedback fetched",
+      data: mockStore.getFeedbackForUser({ _id: req.user.id, role: req.user.role }),
+    });
+  }
+
   let query = {};
 
   if (req.user?.role === "student") {

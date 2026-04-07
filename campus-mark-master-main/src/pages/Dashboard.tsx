@@ -125,14 +125,14 @@ const Dashboard = () => {
 
   const { data: studentSummary } = useQuery({
     queryKey: ["student-dashboard"],
-    queryFn: () => api.get<StudentDashboardSummary>("/student/dashboard"),
+    queryFn: () => api.get<StudentDashboardSummary>("/api/student/dashboard"),
     enabled: currentUser?.role === "student",
     staleTime: 1000 * 60,
   });
 
   const { data: teacherSummary } = useQuery({
     queryKey: ["teacher-dashboard"],
-    queryFn: () => api.get<TeacherDashboardSummary>("/teacher/dashboard"),
+    queryFn: () => api.get<TeacherDashboardSummary>("/api/teacher/dashboard"),
     enabled: currentUser?.role === "teacher",
     staleTime: 1000 * 60,
   });

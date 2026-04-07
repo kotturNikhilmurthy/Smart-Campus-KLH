@@ -2,11 +2,21 @@ import Teacher from "../models/Teacher.js";
 import Event from "../models/Event.js";
 import Feedback from "../models/Feedback.js";
 import Resource from "../models/Resource.js";
+import mockStore from "../services/mockStore.js";
+import { isDatabaseEnabled } from "../services/runtimeConfig.js";
 
 /**
  * Provides overview metrics for logged-in teachers.
  */
 export const getTeacherDashboardSummary = async (req, res) => {
+  if (!isDatabaseEnabled) {
+    return res.status(200).json({
+      success: true,
+      message: "Teacher dashboard summary",
+      data: mockStore.getTeacherDashboardSummary(req.user?.id),
+    });
+  }
+
   const teacherProfile = await Teacher.findOne({ user: req.user?.id });
 
   const myEvents = await Event.countDocuments({ createdBy: req.user?.id });
@@ -43,6 +53,19 @@ export const createEvent = async (req, res) => {
   const eventDate = new Date(date);
   if (Number.isNaN(eventDate.getTime())) {
     return res.status(400).json({ success: false, message: "Invalid event date", data: null });
+  }
+
+  if (!isDatabaseEnabled) {
+    const event = mockStore.createEvent({
+      title: sanitizedTitle,
+      description: sanitizedDescription,
+      date: eventDate.toISOString(),
+      location: sanitizedLocation,
+      category: sanitizedCategory,
+      createdBy: req.user?.id,
+    });
+
+    return res.status(201).json({ success: true, message: "Event created", data: event });
   }
 
   const event = await Event.create({
@@ -97,7 +120,9 @@ export const updateEvent = async (req, res) => {
     updates.category = updates.category.toString().trim();
   }
 
-  const event = await Event.findOneAndUpdate({ _id: eventId, createdBy: req.user?.id }, updates, { new: true });
+  const event = isDatabaseEnabled
+    ? await Event.findOneAndUpdate({ _id: eventId, createdBy: req.user?.id }, updates, { new: true })
+    : mockStore.updateEvent(eventId, req.user?.id, updates);
 
   if (!event) {
     return res.status(404).json({ success: false, message: "Event not found", data: null });
@@ -112,7 +137,9 @@ export const updateEvent = async (req, res) => {
 export const deleteEvent = async (req, res) => {
   const eventId = req.params.eventId;
 
-  const event = await Event.findOneAndDelete({ _id: eventId, createdBy: req.user?.id });
+  const event = isDatabaseEnabled
+    ? await Event.findOneAndDelete({ _id: eventId, createdBy: req.user?.id })
+    : mockStore.deleteEvent(eventId, req.user?.id);
   if (!event) {
     return res.status(404).json({ success: false, message: "Event not found", data: null });
   }
@@ -138,14 +165,23 @@ export const respondToFeedback = async (req, res) => {
     return res.status(400).json({ success: false, message: "Response message is required", data: null });
   }
 
+  const allowedStatuses = ["submitted", "in_review", "resolved"];
+  const normalizedStatus = status?.toString().trim().toLowerCase();
+  const chosenStatus = allowedStatuses.includes(normalizedStatus) ? normalizedStatus : "in_review";
+
+  if (!isDatabaseEnabled) {
+    const updated = mockStore.respondToFeedback(feedbackId, req.user?.id, sanitizedResponse, chosenStatus);
+    if (!updated) {
+      return res.status(404).json({ success: false, message: "Feedback not found", data: null });
+    }
+
+    return res.status(200).json({ success: true, message: "Feedback updated", data: updated });
+  }
+
   const feedback = await Feedback.findById(feedbackId);
   if (!feedback) {
     return res.status(404).json({ success: false, message: "Feedback not found", data: null });
   }
-
-  const allowedStatuses = ["submitted", "in_review", "resolved"];
-  const normalizedStatus = status?.toString().trim().toLowerCase();
-  const chosenStatus = allowedStatuses.includes(normalizedStatus) ? normalizedStatus : "in_review";
 
   feedback.response = sanitizedResponse;
   feedback.status = chosenStatus;
@@ -171,15 +207,25 @@ export const uploadResource = async (req, res) => {
     return res.status(400).json({ success: false, message: "Title, type, department, and semester are required", data: null });
   }
 
-  const resource = await Resource.create({
-    title: sanitizedTitle,
-    type: sanitizedType,
-    department: sanitizedDepartment,
-    semester: sanitizedSemester,
-    fileUrl: sanitizedFileUrl || "",
-    uploadedBy: req.user?.id,
-    uploaderName: req.user?.name,
-  });
+  const resource = isDatabaseEnabled
+    ? await Resource.create({
+        title: sanitizedTitle,
+        type: sanitizedType,
+        department: sanitizedDepartment,
+        semester: sanitizedSemester,
+        fileUrl: sanitizedFileUrl || "",
+        uploadedBy: req.user?.id,
+        uploaderName: req.user?.name,
+      })
+    : mockStore.uploadResource({
+        title: sanitizedTitle,
+        type: sanitizedType,
+        department: sanitizedDepartment,
+        semester: sanitizedSemester,
+        fileUrl: sanitizedFileUrl || "",
+        uploadedBy: req.user?.id,
+        uploaderName: req.user?.name,
+      });
 
   return res.status(201).json({ success: true, message: "Resource uploaded", data: resource });
 };
@@ -215,7 +261,9 @@ export const updateResource = async (req, res) => {
     updates.fileUrl = updates.fileUrl.toString().trim();
   }
 
-  const resource = await Resource.findOneAndUpdate({ _id: resourceId, uploadedBy: req.user?.id }, updates, { new: true });
+  const resource = isDatabaseEnabled
+    ? await Resource.findOneAndUpdate({ _id: resourceId, uploadedBy: req.user?.id }, updates, { new: true })
+    : mockStore.updateResource(resourceId, req.user?.id, updates);
   if (!resource) {
     return res.status(404).json({ success: false, message: "Resource not found", data: null });
   }
@@ -229,7 +277,9 @@ export const updateResource = async (req, res) => {
 export const deleteResource = async (req, res) => {
   const resourceId = req.params.resourceId;
 
-  const resource = await Resource.findOneAndDelete({ _id: resourceId, uploadedBy: req.user?.id });
+  const resource = isDatabaseEnabled
+    ? await Resource.findOneAndDelete({ _id: resourceId, uploadedBy: req.user?.id })
+    : mockStore.deleteResource(resourceId, req.user?.id);
   if (!resource) {
     return res.status(404).json({ success: false, message: "Resource not found", data: null });
   }

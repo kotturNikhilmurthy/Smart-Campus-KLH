@@ -2,6 +2,8 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import User from "../models/User.js";
 import Student from "../models/Student.js";
 import Teacher from "../models/Teacher.js";
+import mockStore from "../services/mockStore.js";
+import { isDatabaseEnabled } from "../services/runtimeConfig.js";
 
 const parseDomainList = (value, fallback) =>
   value
@@ -60,10 +62,10 @@ const configurePassport = (passport) => {
             return done(null, false, { message: "Invalid domain" });
           }
 
-          let user = await User.findOne({ googleId: profile.id });
+          let user;
 
-          if (!user) {
-            user = await User.create({
+          if (!isDatabaseEnabled) {
+            user = mockStore.upsertOAuthUser({
               name,
               email,
               googleId: profile.id,
@@ -71,39 +73,51 @@ const configurePassport = (passport) => {
               role: requestedRole,
             });
           } else {
-            user.name = name;
-            user.email = email;
-            user.profilePic = profilePic;
-            user.role = requestedRole;
-            await user.save();
-          }
+            user = await User.findOne({ googleId: profile.id });
 
-          if (requestedRole === "student") {
-            await Student.findOneAndUpdate(
-              { user: user._id },
-              {
-                user: user._id,
+            if (!user) {
+              user = await User.create({
                 name,
                 email,
                 googleId: profile.id,
                 profilePic,
-                role: "student",
-              },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
-          } else if (requestedRole === "teacher") {
-            await Teacher.findOneAndUpdate(
-              { user: user._id },
-              {
-                user: user._id,
-                name,
-                email,
-                googleId: profile.id,
-                profilePic,
-                role: "teacher",
-              },
-              { upsert: true, new: true, setDefaultsOnInsert: true }
-            );
+                role: requestedRole,
+              });
+            } else {
+              user.name = name;
+              user.email = email;
+              user.profilePic = profilePic;
+              user.role = requestedRole;
+              await user.save();
+            }
+
+            if (requestedRole === "student") {
+              await Student.findOneAndUpdate(
+                { user: user._id },
+                {
+                  user: user._id,
+                  name,
+                  email,
+                  googleId: profile.id,
+                  profilePic,
+                  role: "student",
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+              );
+            } else if (requestedRole === "teacher") {
+              await Teacher.findOneAndUpdate(
+                { user: user._id },
+                {
+                  user: user._id,
+                  name,
+                  email,
+                  googleId: profile.id,
+                  profilePic,
+                  role: "teacher",
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+              );
+            }
           }
 
           return done(null, user);

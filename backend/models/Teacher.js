@@ -5,7 +5,6 @@ const teacherSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     name: { type: String, required: true },
     email: { type: String, required: true },
-    googleId: { type: String, required: true },
     profilePic: { type: String, default: "" },
     role: { type: String, default: "teacher" },
     department: { type: String, default: "General" },

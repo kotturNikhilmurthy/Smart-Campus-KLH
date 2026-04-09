@@ -1,16 +1,17 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const nowIso = () => new Date().toISOString();
 const createId = (prefix) => `${prefix}_${randomUUID()}`;
+const hashPassword = (password) => createHash("sha256").update(String(password)).digest("hex");
 
-const createUser = ({ name, email, role, googleId = "", profilePic = "" }) => ({
+const createUser = ({ name, email, role, profilePic = "", password = "" }) => ({
   _id: createId("user"),
   name,
   email: email.toLowerCase(),
-  googleId,
   profilePic,
   role,
+  passwordHash: password ? hashPassword(password) : "",
   createdAt: nowIso(),
   updatedAt: nowIso(),
 });
@@ -20,7 +21,6 @@ const createStudentProfile = (user) => ({
   user: user._id,
   name: user.name,
   email: user.email,
-  googleId: user.googleId || "",
   profilePic: user.profilePic || "",
   role: "student",
   department: "CSE",
@@ -35,7 +35,6 @@ const createTeacherProfile = (user) => ({
   user: user._id,
   name: user.name,
   email: user.email,
-  googleId: user.googleId || "",
   profilePic: user.profilePic || "",
   role: "teacher",
   department: "General",
@@ -115,16 +114,19 @@ const createSeedData = () => {
     name: "Campus Admin",
     email: "admin@smartcampus.local",
     role: "admin",
+    password: "admin123",
   });
   const teacher = createUser({
     name: "Demo Faculty",
     email: "faculty@smartcampus.local",
     role: "teacher",
+    password: "faculty123",
   });
   const student = createUser({
     name: "Demo Student",
     email: "student@klh.edu.in",
     role: "student",
+    password: "student123",
   });
 
   state.users.push(admin, teacher, student);
@@ -267,47 +269,39 @@ const store = {
     return clone(getUserRoleDetails(user));
   },
 
-  upsertOAuthUser({ name, email, googleId, profilePic, role }) {
-    const normalizedRole = normalizeRole(role);
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    let user = state.users.find((entry) => entry.googleId === googleId) || state.users.find((entry) => entry.email === normalizedEmail);
-
-    if (!user) {
-      user = createUser({ name, email: normalizedEmail, role: normalizedRole, googleId, profilePic });
-      state.users.push(user);
-    } else {
-      user.name = name;
-      user.email = normalizedEmail;
-      user.googleId = googleId;
-      user.profilePic = profilePic || "";
-      user.role = normalizedRole;
-      user.updatedAt = nowIso();
-    }
-
-    ensureRoleProfile(user);
-    return clone(user);
-  },
-
-  upsertDevUser({ name, email, role }) {
+  registerUser({ name, email, role, password }) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const existing = state.users.find((entry) => entry.email === normalizedEmail);
     const normalizedRole = normalizeRole(role || existing?.role || "student");
+    const passwordHash = hashPassword(password);
 
     if (existing) {
       if (name) {
         existing.name = name;
       }
       existing.role = normalizedRole;
+      existing.passwordHash = passwordHash;
       existing.updatedAt = nowIso();
       ensureRoleProfile(existing);
       return clone(existing);
     }
 
     const fallbackName = name?.trim() || normalizedEmail.split("@")[0] || "Campus User";
-    const user = createUser({ name: fallbackName, email: normalizedEmail, role: normalizedRole });
+    const user = createUser({ name: fallbackName, email: normalizedEmail, role: normalizedRole, password });
     state.users.push(user);
     ensureRoleProfile(user);
     return clone(user);
+  },
+
+  authenticateUser({ email, password }) {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const user = state.users.find((entry) => entry.email === normalizedEmail);
+
+    if (!user || !user.passwordHash) {
+      return null;
+    }
+
+    return user.passwordHash === hashPassword(password) ? clone(user) : null;
   },
 
   getAnnouncements() {

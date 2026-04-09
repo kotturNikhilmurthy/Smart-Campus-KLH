@@ -2,13 +2,11 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import passport from "passport";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
-import configurePassport from "./config/passport.js";
 import authRoutes from "./routes/authRoutes.js";
 import apiRoutes from "./routes/apiRoutes.js";
 import studentRoutes from "./routes/studentRoutes.js";
@@ -39,9 +37,6 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Note: Static file serving won't work on Vercel serverless - see cloud storage solution below
 app.use("/uploads", express.static(path.resolve("uploads")));
-
-configurePassport(passport);
-app.use(passport.initialize());
 
 app.get("/health", (req, res) => {
   res.status(200).json({

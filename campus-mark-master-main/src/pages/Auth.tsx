@@ -23,11 +23,6 @@ type AuthSuccess = {
 const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-  const handleGoogleLogin = (role: "student" | "teacher" | "admin" = "student") => {
-    window.location.href = `${apiUrl}/auth/google/${role}`;
-  };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -35,9 +30,10 @@ const Auth = () => {
     
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
+    const password = (formData.get("password") as string) || "";
 
     const payload = await api
-      .post<AuthSuccess>("/auth/dev-login", { email, role: "student" }, { skipToast: true })
+      .post<AuthSuccess>("/auth/login", { email, password }, { skipToast: true })
       .catch((error: Error) => {
         toast.error(error.message || "Login failed");
         return null;
@@ -63,9 +59,10 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const role = ((formData.get("role") as string) || "student").trim();
     const name = (formData.get("name") as string) || "";
+    const password = (formData.get("password") as string) || "";
 
     const payload = await api
-      .post<AuthSuccess>("/auth/dev-login", { name, email, role }, { skipToast: true })
+      .post<AuthSuccess>("/auth/register", { name, email, password, role }, { skipToast: true })
       .catch((error: Error) => {
         toast.error(error.message || "Signup failed");
         return null;
@@ -138,40 +135,6 @@ const Auth = () => {
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Signing in..." : "Sign In"}
                 </Button>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-muted" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white/30 px-2 text-white/80">or continue with</span>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleGoogleLogin("student")}
-                  >
-                    Student
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleGoogleLogin("teacher")}
-                  >
-                    Faculty
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => handleGoogleLogin("admin")}
-                  >
-                    Admin
-                  </Button>
-                </div>
               </form>
             </TabsContent>
             
